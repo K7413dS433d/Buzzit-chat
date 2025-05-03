@@ -79,7 +79,16 @@ export const receiveMessage = async (socket, { message, to }) => {
       });
     }
 
-    // 4. Create new message
+    //4. seen all messages
+    if (chat)
+      await models.Message.updateMany(
+        {
+          $and: [{ chat: chat._id }, { senderId: { $ne: socket.id } }],
+        },
+        { seen: true }
+      );
+
+    // 5. Create new message
     const newMessage = await models.Message.create({
       chat: chat._id,
       senderId,
@@ -87,16 +96,17 @@ export const receiveMessage = async (socket, { message, to }) => {
       receivedAt: Date.now(),
     });
 
-    // 5. Populate sender info if needed
+    // 6. Populate sender info if needed
     const fullMessage = await models.Message.findById(newMessage._id).populate({
       path: "senderId",
       model: "User",
       select: "username profilePic displayName",
     });
 
-    // 6. Emit back to sender
+    // 7. Emit back to sender
     socket.emit("send_message", fullMessage);
-    //7. Emit to target user
+
+    //8. Emit to target user
     if (socket.id != to) ioGetter().to(to).emit("send_message", fullMessage);
   } catch (err) {
     console.error("Error in receiveMessage:", err);
@@ -227,6 +237,15 @@ export const startTyping = async (socket, { chatId }) => {
     const otherUser = chatExist.participants.find(
       (participant) => participant.toString() !== socket.id.toString()
     );
+
+    await models.Message.updateMany(
+      {
+        $and: [{ chat: chatId }, { senderId: { $ne: socket.id } }],
+      },
+      { seen: true }
+    );
+
+    getChat(socket, { userId: otherUser.toString() });
 
     // emit typing event to the other user in the chat
     socket.to(otherUser.toString()).emit("start_typing", {
