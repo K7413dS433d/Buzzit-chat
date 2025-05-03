@@ -10,7 +10,11 @@ export const getAllChats = async (socket) => {
     const allChats = await models.Chat.find({
       participants: { $in: [userId] },
     }).populate("participants", "username profilePic");
-
+    
+    if (allChats.length === 0) {
+      return socket.emit("get_chats", { data: [], message: "No chats found." });
+    }
+    
     // 2. Build chat info
     const chatDetails = await Promise.all(
       allChats.map(async (chat) => {
